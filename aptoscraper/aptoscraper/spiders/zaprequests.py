@@ -7,13 +7,25 @@ import time
 import json
 import os
 
+import locale
+locale.setlocale(locale.LC_ALL, '') # this sets locale to the current Operating System value
+
 #%% CONSTS
 
 DIR = r'../../../'
 JSON = r'rascunhos/zap.json'
 fullpath = os.path.join(os.path.abspath(DIR), JSON)
 
-#%% HTTP request: url
+#%% params
+
+query = 'lagoa rio'
+preco_ate = 1500000
+tipo = 'compra'  # valores possíveis: 'venda', 'compra', 'aluguel'
+
+#%% definições de funções
+
+def fmt_moeda(valor, grouping = True, symbol = True, *args, **kwargs):
+    return locale.currency(valor, grouping = grouping, symbol = symbol, *args, **kwargs)
 
 def qstr_locacoes(query):
 
@@ -132,6 +144,7 @@ def qstr_listagem(locacoes, nres = 200, *args, **kwargs):
 def conversaotipo(tipo, raiseKeyError = False):
     conversaodict = {
         'venda': 'SALE',
+        'compra': 'SALE',
         'aluguel': 'RENTAL'
     }
 
@@ -140,6 +153,7 @@ def conversaotipo(tipo, raiseKeyError = False):
     else:
         return conversaodict.get(tipo.lower(), '').upper()
 
+#%% HTTP request ou leitura de json + preproc
 headers = {
     "authority": "glue-api.zapimoveis.com.br",
     "sec-ch-ua": "^\^Opera^^;v=^\^77^^, ^\^Chromium^^;v=^\^91^^, ^\^",
@@ -147,16 +161,6 @@ headers = {
     "accept": "application/json, text/plain, */*",
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.164 Safari/537.36 OPR/77.0.4054.277"
 }
-
-### ----
-### params
-### ----
-
-query = 'lagoa rio'
-preco_ate = 1500000
-tipo = 'venda'
-
-### fim params
 
 url_locacoes = "https://glue-api.zapimoveis.com.br/v3/locations"
 
@@ -201,10 +205,10 @@ endereco_campos = {
 print(f"{len(listagens['search']['result']['listings']) = }")
 
 i = 1
-for res in listagens['search']['result']['listings']:
+for res in listagens['search']['result']['listings'][:20]:
     id = res['listing']['externalId']
-
-
+    origem = res['listing']['portal']
+    impulsao = res['listing']['publicationType']
 
     areasuteis = res['listing']['usableAreas']
     # if len(areasuteis) == 1:
@@ -215,11 +219,9 @@ for res in listagens['search']['result']['listings']:
     atualizadoe_em = res['listing']['updatedAt']
     endereco = { c_pt: res['listing']['address'].get(c_en, '') for c_en, c_pt in endereco_campos.items() }
     amenidades = res['listing']['amenities']
+    vagas = res['listing']['parkingSpaces'][0]
+    pois = res['listing']['address'].get('poisList', [])
 
-
-    if len(res['listing']['bedrooms']) == 1:
-        continue
-    
     # comodos
     comodos_conversao = {
         'qts': 'bedrooms',
@@ -234,7 +236,13 @@ for res in listagens['search']['result']['listings']:
             comodos[c_pt] = res['listing'][c_en][0]
         except IndexError:
             pass
+
     
+    # contatos
+    contatos = res['listing'].get('advertiserContact', {})
+    contatos['zapzap'] = res['listing'].get('whatsappNumber', '')
+    contatos['nome'] = res['account'].get('name', '')
+
     # precos
     todosprecos = res['listing']['pricingInfos']
     
@@ -262,8 +270,16 @@ for res in listagens['search']['result']['listings']:
                 pormes += float(v)
         except ValueError:
             continue
-        
-    despesapormes = pormes + porano / 12
+    
+    if tipo.lower() in ('venda', 'compra'):
+        despesapormes = pormes + porano / 12
+        precostr = [ f'Preço: {fmt_moeda(preco)} + {fmt_moeda(despesapormes)} / mês' ]
+    
+    else:
+        despesapormes = pormes + preco
+        precostr = [ f'Preço: {fmt_moeda(despesapormes)} / mês + {fmt_moeda(porano)} IPTU' ]
+        garantia = precos['rentalInfo']['warranties']
+        precostr.append(f'    Garantias: {garantia}')
     
     link_rel = res['link']['href']
     
@@ -273,21 +289,21 @@ for res in listagens['search']['result']['listings']:
 
     link = rf'{linkfull}{link_rel}'
 
-    print(f'{i: 4n}. {id = }')
+    print(f'{i: 4n}. {id = } ({origem = }, {impulsao = })')
     print(f'      Área: {areautil} m²')
     print(f'      Descrição: {desc[:50]}')
     print(f'      Cômodos: {comodos}')
-    print(f'      Preço: R$ {preco:.2f} + R$ {despesapormes:.2f} / mês')
-    print(f'      Preço: {precos}')
+    print(f'      Vagas de garagem: {vagas}')
+    for linha in precostr:
+        print(f'      {linha}')
+    # print(f'      Preço: {precos}')
     print(f'      Amenidades: {amenidades}')
     print(f'      Endereço: {endereco}')
+    print(f'      Pontos de Interesse: {pois}')
+    print(f'      Contato: {contatos}')
     print(f'      Link: {link}')
     print('')
 
     i += 1
-# %%
-for a in [1,2,3]:
-    if a == 1:
-        continue
-    print(a)
+
 # %%
