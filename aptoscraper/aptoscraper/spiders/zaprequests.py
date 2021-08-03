@@ -4,6 +4,14 @@
 #%% imports
 import requests
 import time
+import json
+import os
+
+#%% CONSTS
+
+DIR = r'../../../'
+JSON = r'rascunhos/zap.json'
+fullpath = os.path.join(os.path.abspath(DIR), JSON)
 
 #%% HTTP request: url
 
@@ -30,7 +38,7 @@ def qstr_listagem(locacoes, nres = 200, *args, **kwargs):
 
     res_mais_provavel = locacoes[matchscores[maiorscore]]['result']['locations'][0]
 
-    print(res_mais_provavel)
+    print(f'Locação mais provável: {res_mais_provavel}')
 
     tipo_loc = matchscores[maiorscore]
     tipo_pag = res_mais_provavel['uriCategory']['page']
@@ -113,7 +121,24 @@ def qstr_listagem(locacoes, nres = 200, *args, **kwargs):
     except KeyError:
         pass
 
+    try:
+        querystring_listagem.update( { 'business': conversaotipo(tipo, raiseKeyError = True) })
+    except KeyError:
+        pass
+
+
     return querystring_listagem
+
+def conversaotipo(tipo, raiseKeyError = False):
+    conversaodict = {
+        'venda': 'SALE',
+        'aluguel': 'RENTAL'
+    }
+
+    if raiseKeyError:
+        return conversaodict[tipo.lower()].upper()
+    else:
+        return conversaodict.get(tipo.lower(), '').upper()
 
 headers = {
     "authority": "glue-api.zapimoveis.com.br",
@@ -123,28 +148,146 @@ headers = {
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.164 Safari/537.36 OPR/77.0.4054.277"
 }
 
-query = 'niterói mariz e barros'
+### ----
+### params
+### ----
+
+query = 'lagoa rio'
 preco_ate = 1500000
+tipo = 'venda'
+
+### fim params
 
 url_locacoes = "https://glue-api.zapimoveis.com.br/v3/locations"
 
 url_listagem = "https://glue-api.zapimoveis.com.br/v2/listings"
 
-with requests.Session() as sessao:
+try:
+    with open(fullpath, 'r', encoding = 'utf-8') as zapjson:
+        listings = json.load(zapjson)
 
-    pagina_inicial = sessao.get('https://www.zapimoveis.com.br/')
+except FileNotFoundError:  # arquivo não existe. Vamos criar um
+    with requests.Session() as sessao:
 
-    querystring_locacoes = qstr_locacoes(query = query)
+        pagina_inicial = sessao.get('https://www.zapimoveis.com.br/')
 
-    resposta_locacoes = sessao.request("GET", url_locacoes, headers=headers, params=querystring_locacoes)
+        querystring_locacoes = qstr_locacoes(query = query)
 
-    querystring_listagens = qstr_listagem(resposta_locacoes.json(), nres = 3, preco_ate = preco_ate)
+        resposta_locacoes = sessao.request("GET", url_locacoes, headers=headers, params=querystring_locacoes)
 
-    resposta_listagens = sessao.request("GET", url_listagem, headers=headers, params=querystring_listagens)
+        querystring_listagens = qstr_listagem(resposta_locacoes.json(), 
+                                                nres = 300, preco_ate = preco_ate,
+                                                tipo = tipo)
 
-    listagens = resposta_listagens.json()
+        resposta_listagens = sessao.request("GET", url_listagem, headers=headers, params=querystring_listagens)
 
-    #print(querystring_listagens)
-    #print(listagens)
-  
+        listagens = resposta_listagens.json()
+
+    with open(fullpath, 'w', encoding = 'utf-8') as zapjson:
+        writestr = json.dumps(listagens)
+        zapjson.write(writestr)
+
+# agora que já temos listagens...
+
+endereco_campos = {
+    'zipCode': 'cep', 
+    'country': 'pais', 
+    'stateAcronym': 'estado', 
+    'city': 'cidade', 
+    'neighborhood': 'bairro', 
+    'street': 'rua',
+    'complement': 'complemento'
+}    
+print(f"{len(listagens['search']['result']['listings']) = }")
+
+i = 1
+for res in listagens['search']['result']['listings']:
+    id = res['listing']['externalId']
+
+
+
+    areasuteis = res['listing']['usableAreas']
+    # if len(areasuteis) == 1:
+    #     continue
+    areautil = areasuteis[0]
+
+    desc = res['listing']['description']
+    atualizadoe_em = res['listing']['updatedAt']
+    endereco = { c_pt: res['listing']['address'].get(c_en, '') for c_en, c_pt in endereco_campos.items() }
+    amenidades = res['listing']['amenities']
+
+
+    if len(res['listing']['bedrooms']) == 1:
+        continue
+    
+    # comodos
+    comodos_conversao = {
+        'qts': 'bedrooms',
+        'banheiros': 'bathrooms',
+        'suites': 'suites'
+    }
+    comodos = {}
+    
+    for c_pt, c_en in comodos_conversao.items():
+        comodos[c_pt] = 0
+        try:
+            comodos[c_pt] = res['listing'][c_en][0]
+        except IndexError:
+            pass
+    
+    # precos
+    todosprecos = res['listing']['pricingInfos']
+    
+    # vamos procurar se uma das precificações corresponde ao tipo que queremos
+    for precos in todosprecos:
+        if precos['businessType'] == conversaotipo(tipo = tipo):
+            break
+    else:  # não encontramos. passa para o próximo
+        continue
+
+    # lenprecos = len(precos)
+    # if lenprecos == 1:
+    #     continue
+    
+    porano = 0
+    pormes = 0
+    for k, v in precos.items():
+        
+        try:
+            if k == 'price':
+                preco = float(v)
+            elif k.startswith('yearly'):
+                porano += float(v)
+            elif k.startswith('monthly'):
+                pormes += float(v)
+        except ValueError:
+            continue
+        
+    despesapormes = pormes + porano / 12
+    
+    link_rel = res['link']['href']
+    
+    linkfull = r"https://www.zapimoveis.com.br"
+    if not link_rel.startswith(r'/'):
+        linkfull += r'/'
+
+    link = rf'{linkfull}{link_rel}'
+
+    print(f'{i: 4n}. {id = }')
+    print(f'      Área: {areautil} m²')
+    print(f'      Descrição: {desc[:50]}')
+    print(f'      Cômodos: {comodos}')
+    print(f'      Preço: R$ {preco:.2f} + R$ {despesapormes:.2f} / mês')
+    print(f'      Preço: {precos}')
+    print(f'      Amenidades: {amenidades}')
+    print(f'      Endereço: {endereco}')
+    print(f'      Link: {link}')
+    print('')
+
+    i += 1
+# %%
+for a in [1,2,3]:
+    if a == 1:
+        continue
+    print(a)
 # %%
