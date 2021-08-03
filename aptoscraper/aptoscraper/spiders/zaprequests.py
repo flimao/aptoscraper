@@ -19,8 +19,16 @@ fullpath = os.path.join(os.path.abspath(DIR), JSON)
 #%% params
 
 query = 'lagoa rio'
-preco_ate = 1500000
-tipo = 'compra'  # valores possíveis: 'venda', 'compra', 'aluguel'
+parametros_busca = {
+    'precomin': 300000,
+    'precomax': 1500000,
+    'nquartos': 3,
+    'nbanheiros': 2,
+    'areamin': 100,
+    'areamax': 200,
+    'tipo': 'compra',  # valores possíveis: 'venda', 'compra', 'aluguel'
+    'nres': 200
+} 
 
 #%% definições de funções
 
@@ -129,10 +137,40 @@ def qstr_listagem(locacoes, nres = 200, *args, **kwargs):
     }
 
     try:
-        querystring_listagem.update( { 'priceMax': str(kwargs['preco_ate']) })
+        querystring_listagem.update( { 'priceMin': str(kwargs['precomin']) })
     except KeyError:
         pass
 
+    try:
+        querystring_listagem.update( { 'priceMax': str(kwargs['precomax']) })
+    except KeyError:
+        pass
+
+    try:
+        querystring_listagem.update( { 'bathrooms': str(kwargs['nbanheiros']) })
+    except KeyError:
+        pass
+
+    try:
+        querystring_listagem.update( { 'bedrooms': str(kwargs['nquartos']) })
+    except KeyError:
+        pass
+
+    try:
+        querystring_listagem.update( { 'parkingSpaces': str(kwargs['nvagas']) })
+    except KeyError:
+        pass
+
+    try:
+        querystring_listagem.update( { 'usableAreasMin': str(kwargs['areamin']) })
+    except KeyError:
+        pass
+
+    try:
+        querystring_listagem.update( { 'usableAreasMax': str(kwargs['areamax']) })
+    except KeyError:
+        pass
+    
     try:
         querystring_listagem.update( { 'business': conversaotipo(tipo, raiseKeyError = True) })
     except KeyError:
@@ -179,9 +217,7 @@ except FileNotFoundError:  # arquivo não existe. Vamos criar um
 
         resposta_locacoes = sessao.request("GET", url_locacoes, headers=headers, params=querystring_locacoes)
 
-        querystring_listagens = qstr_listagem(resposta_locacoes.json(), 
-                                                nres = 300, preco_ate = preco_ate,
-                                                tipo = tipo)
+        querystring_listagens = qstr_listagem(resposta_locacoes.json(), **parametros_busca)
 
         resposta_listagens = sessao.request("GET", url_listagem, headers=headers, params=querystring_listagens)
 
