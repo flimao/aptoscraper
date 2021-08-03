@@ -19,6 +19,9 @@ NEWSPIDER_MODULE = 'aptoscraper.spiders'
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = True
 
+# Urllength middleware (https://docs.scrapy.org/en/latest/_modules/scrapy/spidermiddlewares/urllength.html)
+URLLENGTH_LIMIT = 10000
+
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
 #CONCURRENT_REQUESTS = 32
 
