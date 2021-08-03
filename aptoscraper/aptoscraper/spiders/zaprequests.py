@@ -219,7 +219,12 @@ for res in listagens['search']['result']['listings'][:20]:
     atualizadoe_em = res['listing']['updatedAt']
     endereco = { c_pt: res['listing']['address'].get(c_en, '') for c_en, c_pt in endereco_campos.items() }
     amenidades = res['listing']['amenities']
-    vagas = res['listing']['parkingSpaces'][0]
+    
+    try:
+        vagas = res['listing']['parkingSpaces'][0]
+    except IndexError:
+        vagas = 0
+    
     pois = res['listing']['address'].get('poisList', [])
 
     # comodos
@@ -257,27 +262,39 @@ for res in listagens['search']['result']['listings'][:20]:
     # if lenprecos == 1:
     #     continue
     
-    porano = 0
-    pormes = 0
+    preco_fmt = {
+        'porano': 0,
+        'pormes': 0,
+        'preco': None,
+        'iptu': None
+    }
+
     for k, v in precos.items():
         
         try:
             if k == 'price':
-                preco = float(v)
+                preco_fmt['preco'] = float(v)
+            elif 'iptu' in k.lower():
+                preco_fmt['iptu'] = float(v)
             elif k.startswith('yearly'):
-                porano += float(v)
+                preco_fmt['porano'] += float(v)
             elif k.startswith('monthly'):
-                pormes += float(v)
+                preco_fmt['pormes'] += float(v)
         except ValueError:
             continue
     
+    despesapormes = preco_fmt['pormes'] + preco_fmt['porano'] / 12
     if tipo.lower() in ('venda', 'compra'):
-        despesapormes = pormes + porano / 12
-        precostr = [ f'Preço: {fmt_moeda(preco)} + {fmt_moeda(despesapormes)} / mês' ]
+        
+        precostr = [ f"Preço: {fmt_moeda(preco_fmt['preco'])} + {fmt_moeda(despesapormes)} / mês" ]
+        if preco_fmt['iptu'] is not None:
+            precostr[0] += f" + {fmt_moeda(preco_fmt['iptu'])} IPTU"
     
     else:
-        despesapormes = pormes + preco
-        precostr = [ f'Preço: {fmt_moeda(despesapormes)} / mês + {fmt_moeda(porano)} IPTU' ]
+        precostr = [ f"Preço: {fmt_moeda(despesapormes)} / mês" ]
+        if preco_fmt['iptu'] is not None:
+            precostr[0] += f" + {fmt_moeda(preco_fmt['iptu'])} IPTU"
+
         garantia = precos['rentalInfo']['warranties']
         precostr.append(f'    Garantias: {garantia}')
     
@@ -296,7 +313,7 @@ for res in listagens['search']['result']['listings'][:20]:
     print(f'      Vagas de garagem: {vagas}')
     for linha in precostr:
         print(f'      {linha}')
-    # print(f'      Preço: {precos}')
+    #print(f'      Preço: {precos}')
     print(f'      Amenidades: {amenidades}')
     print(f'      Endereço: {endereco}')
     print(f'      Pontos de Interesse: {pois}')
