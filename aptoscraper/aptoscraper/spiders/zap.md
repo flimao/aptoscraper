@@ -1,5 +1,11 @@
 # Anotações para o scraper do ZAP Imóveis
 
+## Comando scrapy:
+
+```cmd
+$ scrapy crawl zap -a busca="um lugar qualquer" -a precomax=1500000 -a precomin=100000 -a areamin=100 -a areamax=200 -a nquartos=3 -a nbanheiros=2 -a vagas=1 -a nres=50 -o "../bd/zap.csv"
+```
+
 ### API REST /v3/locations
 
 * URL: `"https://glue-api.zapimoveis.com.br/v3/locations"`
