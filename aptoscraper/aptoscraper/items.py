@@ -4,7 +4,17 @@
 # https://docs.scrapy.org/en/latest/topics/items.html
 
 import scrapy
-from itemloaders.processors import MapCompose, TakeFirst
+from itemloaders.processors import Compose, TakeFirst
+
+def fillzero(valor):
+    try:
+        if len(valor) == 0:
+            return [ 0 ]
+    except TypeError:  # not iterable
+        if not valor:
+            return [ 0 ]
+    
+    return valor
 
 # ZAP Imóveis
 class ZAPItem(scrapy.Item):
@@ -13,10 +23,18 @@ class ZAPItem(scrapy.Item):
     impulsao = scrapy.Field()
     area = scrapy.Field()
     desc = scrapy.Field()
-    nquartos = scrapy.Field()
-    nbanheiros = scrapy.Field()
-    nsuites = scrapy.Field()
-    nvagas = scrapy.Field()
+    nquartos = scrapy.Field(
+        output_processor = TakeFirst()
+    )
+    nbanheiros = scrapy.Field(
+        output_processor = TakeFirst()
+    )
+    nsuites = scrapy.Field(
+        output_processor = TakeFirst()
+    )
+    nvagas = scrapy.Field(
+        output_processor = TakeFirst()
+    )
     preco = scrapy.Field()
     despesa_mes = scrapy.Field()
     despesa_ano = scrapy.Field()
@@ -35,4 +53,3 @@ class ZAPItem(scrapy.Item):
     contato_nome = scrapy.Field()
     atualizado_em = scrapy.Field()
     link = scrapy.Field()
-    
