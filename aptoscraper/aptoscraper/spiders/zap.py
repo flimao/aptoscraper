@@ -60,6 +60,7 @@ class ZAPSpider(scrapy.Spider):
 
         listagens = response.json()
 
+        # endereço
         endereco_campos = {
             'zipCode': 'cep', 
             'country': 'pais', 
@@ -69,6 +70,13 @@ class ZAPSpider(scrapy.Spider):
             'street': 'rua',
             'complement': 'complemento'
         } 
+
+        # comodos
+        comodos_conversao = {
+            'quartos': 'bedrooms',
+            'banheiros': 'bathrooms',
+            'suites': 'suites'
+        }
 
         pgdict = listagens['page']['uriPagination']
         numero_resultados = len(listagens['search']['result']['listings']) +\
@@ -84,44 +92,28 @@ class ZAPSpider(scrapy.Spider):
                 l.add_value('id', res['listing']['externalId'])
                 l.add_value('origem', res['listing']['portal'])
                 l.add_value('impulsao', res['listing']['publicationType'])
-
-            #     areasuteis = res['listing']['usableAreas']
-            #     # if len(areasuteis) == 1:
-            #     #     continue
-            #     areautil = areasuteis[0]
-
-            #     desc = res['listing']['description']
-            #     atualizadoe_em = res['listing']['updatedAt']
-            #     endereco = { c_pt: res['listing']['address'].get(c_en, '') for c_en, c_pt in endereco_campos.items() }
-            #     amenidades = res['listing']['amenities']
+                l.add_value('area', res['listing']['usableAreas'])
+                l.add_value('desc', res['listing']['description'])
+                l.add_value('atualizado_em', res['listing']['updatedAt'])
+                for c_en, c_pt in endereco_campos.items():
+                    l.add_value(f'endereco_{c_pt}', res['listing']['address'].get(c_en, ''))
+            
+                l.add_value('amenidades', res['listing']['amenities'])
+                l.add_value('nvagas', res['listing']['parkingSpaces'])
                 
-            #     try:
-            #         vagas = res['listing']['parkingSpaces'][0]
-            #     except IndexError:
-            #         vagas = 0
-                
-            #     pois = res['listing']['address'].get('poisList', [])
+                l.add_value('pois', res['listing']['address'].get('poisList', []))
 
-            #     # comodos
-            #     comodos_conversao = {
-            #         'qts': 'bedrooms',
-            #         'banheiros': 'bathrooms',
-            #         'suites': 'suites'
-            #     }
-            #     comodos = {}
-                
-            #     for c_pt, c_en in comodos_conversao.items():
-            #         comodos[c_pt] = 0
-            #         try:
-            #             comodos[c_pt] = res['listing'][c_en][0]
-            #         except IndexError:
-            #             pass
+                for c_pt, c_en in comodos_conversao.items():
+                    l.add_value(f'n{c_pt}', res['listing'][c_en])              
+              
+                # contatos
 
-                
-            #     # contatos
-            #     contatos = res['listing'].get('advertiserContact', {})
-            #     contatos['zapzap'] = res['listing'].get('whatsappNumber', '')
-            #     contatos['nome'] = res['account'].get('name', '')
+                l.add_value('contato_fones', res['listing']['advertiserContact']['phones'])
+                l.add_value('contato_whatsapp', res['listing']['whatsappNumber'])
+                l.add_value('contato_nome', res['account']['name'])
+                # contatos = res['listing'].get('advertiserContact', {})
+                # contatos['whatsapp'] = res['listing'].get('whatsappNumber', '')
+                # contatos['nome'] = res['account'].get('name', '')
 
             #     # precos
             #     todosprecos = res['listing']['pricingInfos']
@@ -243,7 +235,6 @@ class ZAPSpider(scrapy.Spider):
         lon = str(self.loc_mais_provavel['address']['point']['lon'])
 
         fromval = self.nres * (int(page) - 1)
-        logger.info(f"'from' = {fromval}")
 
         querystring_listagem = {
             "business": "SALE",
