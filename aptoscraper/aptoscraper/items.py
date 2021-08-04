@@ -4,6 +4,7 @@
 # https://docs.scrapy.org/en/latest/topics/items.html
 
 import scrapy
+from itemloaders.processors import MapCompose, TakeFirst
 
 # ZAP Imóveis
 class ZAPItem(scrapy.Item):
@@ -32,5 +33,6 @@ class ZAPItem(scrapy.Item):
     contato_fones = scrapy.Field()
     contato_whatsapp = scrapy.Field()
     contato_nome = scrapy.Field()
+    atualizado_em = scrapy.Field()
     link = scrapy.Field()
     
