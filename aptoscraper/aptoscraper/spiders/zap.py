@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import scrapy
 from scrapy.loader import ItemLoader
 from aptoscraper.items import ZAPItem
@@ -23,12 +26,20 @@ class ZAPSpider(scrapy.Spider):
     def start_requests(self):
         url_locacoes = "https://glue-api.zapimoveis.com.br/v3/locations"
 
+        # default nres = 200
         if getattr(self, 'nres', None) is None:
             self.nres = 200
         else:
             self.nres = int(self.nres)
 
-        qstr_locacoes = self.qstr_locacoes(self.busca)
+        # default tipo = 'compra'
+        self.tipo = getattr(self, 'negocio', 'compra')
+
+
+        try:
+            qstr_locacoes = self.qstr_locacoes(self.busca)
+        except AttributeError:  # self.busca não existe porque esquecemos de passar parâmetros
+            raise AttributeError('"self.busca" não está definido. Esqueceu de passar os termos de busca via parâmetros do scrapy (-a busca="<termos de busca>")?')
 
         # montagem de url
         # url = f'{url_locacoes}?'
@@ -89,45 +100,48 @@ class ZAPSpider(scrapy.Spider):
         for destaque in (listagens['superPremium'], listagens):
             for res in destaque['search']['result']['listings']:
                 l = ItemLoader(item = ZAPItem())
+                
                 l.add_value('id', res['listing']['externalId'])
                 l.add_value('origem', res['listing']['portal'])
                 l.add_value('impulsao', res['listing']['publicationType'])
+
+                # area util
                 l.add_value('area', res['listing']['usableAreas'])
+
                 l.add_value('desc', res['listing']['description'])
                 l.add_value('atualizado_em', res['listing']['updatedAt'])
+
+                # endereco
                 for c_en, c_pt in endereco_campos.items():
                     l.add_value(f'endereco_{c_pt}', res['listing']['address'].get(c_en, ''))
             
                 l.add_value('amenidades', res['listing']['amenities'])
+
+                # vagas de garagem
                 l.add_value('nvagas', res['listing']['parkingSpaces'])
                 
+                # pontos de interesse
                 l.add_value('pois', res['listing']['address'].get('poisList', []))
 
+                # comodos
                 for c_pt, c_en in comodos_conversao.items():
                     l.add_value(f'n{c_pt}', res['listing'][c_en])              
               
                 # contatos
-
                 l.add_value('contato_fones', res['listing']['advertiserContact']['phones'])
                 l.add_value('contato_whatsapp', res['listing']['whatsappNumber'])
                 l.add_value('contato_nome', res['account']['name'])
-                # contatos = res['listing'].get('advertiserContact', {})
-                # contatos['whatsapp'] = res['listing'].get('whatsappNumber', '')
-                # contatos['nome'] = res['account'].get('name', '')
+    
 
-            #     # precos
-            #     todosprecos = res['listing']['pricingInfos']
+                # precos
+                todosprecos = res['listing']['pricingInfos']
                 
-            #     # vamos procurar se uma das precificações corresponde ao tipo que queremos
-            #     for precos in todosprecos:
-            #         if precos['businessType'] == conversaotipo(tipo = tipo):
-            #             break
-            #     else:  # não encontramos. passa para o próximo
-            #         continue
-
-            #     # lenprecos = len(precos)
-            #     # if lenprecos == 1:
-            #     #     continue
+                # vamos procurar se uma das precificações corresponde ao tipo que queremos
+                for precos in todosprecos:
+                    if precos['businessType'] == self.conversaotipo(tipo = self.tipo):
+                        break
+                else:  # não encontramos. passa para o próximo
+                    continue
                 
             #     preco_fmt = {
             #         'porano': 0,
@@ -237,7 +251,7 @@ class ZAPSpider(scrapy.Spider):
         fromval = self.nres * (int(page) - 1)
 
         querystring_listagem = {
-            "business": "SALE",
+            "business": 'SALE',
             "categoryPage": tipo_pag,
             "parentId": "null",
             "listingType": "USED",
@@ -302,6 +316,11 @@ class ZAPSpider(scrapy.Spider):
         }
 
         try:
+            querystring_listagem.update( { 'business': self.conversaotipo(tipo = self.tipo, raiseError = True) })
+        except AttributeError:
+            pass
+
+        try:
             querystring_listagem.update( { 'priceMin': str(self.precomin) })
         except AttributeError:
             pass
@@ -335,20 +354,10 @@ class ZAPSpider(scrapy.Spider):
             querystring_listagem.update( { 'usableAreasMax': str(self.areamax) })
         except AttributeError:
             pass
-        
-        try:
-            tipo = getattr(self, 'tipo', None) 
-            if tipo is not None:
-                querystring_listagem.update( { 'business': self.conversaotipo(tipo, raiseError = True) })
-            else:
-                querystring_listagem.update( { 'business': self.conversaotipo(raiseError = True) })
-        except AttributeError:
-            pass
-
 
         return querystring_listagem
 
-    def conversaotipo(tipo = 'compra', raiseError = False):
+    def conversaotipo(self, tipo = 'compra', raiseError = False):
         conversaodict = {
             'venda': 'SALE',
             'compra': 'SALE',
