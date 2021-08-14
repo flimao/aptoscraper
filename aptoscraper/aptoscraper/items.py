@@ -17,6 +17,16 @@ def fillzero(valor):
     return valor
 
 # ZAP Imóveis
+
+def fill_link(link_rel):            
+    linkdom = r"https://www.zapimoveis.com.br"
+    
+    if not link_rel.startswith(r'/'):
+        linkdom += r'/'
+
+    return rf'{linkdom}{link_rel}'
+    
+
 class ZAPItem(scrapy.Item):
     id = scrapy.Field()
     origem = scrapy.Field()
@@ -52,4 +62,7 @@ class ZAPItem(scrapy.Item):
     contato_whatsapp = scrapy.Field()
     contato_nome = scrapy.Field()
     atualizado_em = scrapy.Field()
-    link = scrapy.Field()
+    link = scrapy.Field(
+        output_processor = Compose(TakeFirst(), fill_link)
+    )
+

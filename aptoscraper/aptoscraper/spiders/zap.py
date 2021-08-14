@@ -179,13 +179,7 @@ class ZAPSpider(scrapy.Spider):
             #         garantia = precos['rentalInfo']['warranties']
             #         precostr.append(f'    Garantias: {garantia}')
                 
-                link_rel = res['link']['href']
-                
-                linkfull = r"https://www.zapimoveis.com.br"
-                if not link_rel.startswith(r'/'):
-                    linkfull += r'/'
-
-                l.add_value('link', rf'{linkfull}{link_rel}')
+                l.add_value('link', res['link']['href'])
 
             #     print(f'{i: 4n}. {id = } ({origem = }, {impulsao = })')
             #     print(f'      Área: {areautil} m²')
