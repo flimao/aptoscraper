@@ -45,10 +45,18 @@ class ZAPItem(scrapy.Item):
     nvagas = scrapy.Field(
         output_processor = TakeFirst()
     )
-    preco = scrapy.Field()
-    despesa_mes = scrapy.Field()
-    despesa_ano = scrapy.Field()
-    iptu = scrapy.Field()
+    preco = scrapy.Field(
+        output_processor = TakeFirst()
+    )
+    despesa_mes = scrapy.Field(
+        output_processor = TakeFirst()
+    )
+    despesa_ano = scrapy.Field(
+        output_processor = TakeFirst()
+    )
+    iptu = scrapy.Field(
+        output_processor = TakeFirst()
+    )
     amenidades = scrapy.Field()
     endereco_cep = scrapy.Field()
     endereco_pais = scrapy.Field()
@@ -65,4 +73,5 @@ class ZAPItem(scrapy.Item):
     link = scrapy.Field(
         output_processor = Compose(TakeFirst(), fill_link)
     )
+    garantias_aluguel = scrapy.Field()
 

@@ -24,6 +24,10 @@ class ZAPSpider(scrapy.Spider):
     # This is a built-in Scrapy function that runs first where we'll override the default headers
     # Documentation: https://doc.scrapy.org/en/latest/topics/spiders.html#scrapy.spiders.Spider.start_requests
     def start_requests(self):
+
+        self.stats = self.crawler.stats
+        self.stats.set_value('item_pages_scraped', 0)
+
         url_locacoes = "https://glue-api.zapimoveis.com.br/v3/locations"
 
         # default nres = 200
@@ -63,6 +67,8 @@ class ZAPSpider(scrapy.Spider):
         url_listagens = "https://glue-api.zapimoveis.com.br/v2/listings"
 
         qstr_listagens = self.qstr_listagem(page = page)
+
+        self.stats.inc_value('item_pages_scraped')
 
         return scrapy.http.FormRequest(url_listagens, method = 'GET',
                 headers = self.__class__.headers, formdata = qstr_listagens, callback = self.parse_listagens)
@@ -134,6 +140,7 @@ class ZAPSpider(scrapy.Spider):
     
 
                 # precos
+    
                 todosprecos = res['listing']['pricingInfos']
                 
                 # vamos procurar se uma das precificações corresponde ao tipo que queremos
@@ -143,60 +150,34 @@ class ZAPSpider(scrapy.Spider):
                 else:  # não encontramos. passa para o próximo
                     continue
                 
-            #     preco_fmt = {
-            #         'porano': 0,
-            #         'pormes': 0,
-            #         'preco': None,
-            #         'iptu': None
-            #     }
+                despesa_mes = 0
+                despesa_ano = 0
 
-            #     for k, v in precos.items():
+                for k, v in precos.items():
                     
-            #         try:
-            #             if k == 'price':
-            #                 preco_fmt['preco'] = float(v)
-            #             elif 'iptu' in k.lower():
-            #                 preco_fmt['iptu'] = float(v)
-            #             elif k.startswith('yearly'):
-            #                 preco_fmt['porano'] += float(v)
-            #             elif k.startswith('monthly'):
-            #                 preco_fmt['pormes'] += float(v)
-            #         except ValueError:
-            #             continue
+                    try:
+                        if k == 'price':
+                            l.add_value('preco', float(v))
+                        elif 'iptu' in k.lower():
+                            l.add_value('iptu', float(v))
+                        elif k.startswith('yearly'):
+                            despesa_ano += float(v)
+                        elif k.startswith('monthly'):
+                            despesa_mes += float(v)
+                    except ValueError:
+                        continue
                 
-            #     despesapormes = preco_fmt['pormes'] + preco_fmt['porano'] / 12
-            #     if tipo.lower() in ('venda', 'compra'):
-                    
-            #         precostr = [ f"Preço: {fmt_moeda(preco_fmt['preco'])} + {fmt_moeda(despesapormes)} / mês" ]
-            #         if preco_fmt['iptu'] is not None:
-            #             precostr[0] += f" + {fmt_moeda(preco_fmt['iptu'])} IPTU"
-                
-            #     else:
-            #         precostr = [ f"Preço: {fmt_moeda(despesapormes)} / mês" ]
-            #         if preco_fmt['iptu'] is not None:
-            #             precostr[0] += f" + {fmt_moeda(preco_fmt['iptu'])} IPTU"
+                l.add_value('despesa_mes', despesa_mes)
+                l.add_value('despesa_ano', despesa_ano)
 
-            #         garantia = precos['rentalInfo']['warranties']
-            #         precostr.append(f'    Garantias: {garantia}')
-                
+                # garantias de aluguel
+
+                if self.tipo not in ('compra', 'venda'):
+                    l.add_value('garantias_aluguel', precos['rentalInfo']['warranties'])
+
+                # link relativo              
                 l.add_value('link', res['link']['href'])
 
-            #     print(f'{i: 4n}. {id = } ({origem = }, {impulsao = })')
-            #     print(f'      Área: {areautil} m²')
-            #     print(f'      Descrição: {desc[:50]}')
-            #     print(f'      Cômodos: {comodos}')
-            #     print(f'      Vagas de garagem: {vagas}')
-            #     for linha in precostr:
-            #         print(f'      {linha}')
-            #     #print(f'      Preço: {precos}')
-            #     print(f'      Amenidades: {amenidades}')
-            #     print(f'      Endereço: {endereco}')
-            #     print(f'      Pontos de Interesse: {pois}')
-            #     print(f'      Contato: {contatos}')
-            #     print(f'      Link: {link}')
-            #     print('')
-
-            #     i += 1
                 yield l.load_item()
         
         if numero_resultados > 0:
