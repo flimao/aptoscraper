@@ -4,7 +4,9 @@
 # https://docs.scrapy.org/en/latest/topics/items.html
 
 import scrapy
-from itemloaders.processors import Compose, TakeFirst
+from itemloaders import ItemLoader
+from itemloaders.processors import MapCompose, Compose, TakeFirst, Join
+import re
 
 def fillzero(valor):
     try:
@@ -65,6 +67,10 @@ class ZAPItem(scrapy.Item):
     endereco_bairro = scrapy.Field()
     endereco_rua = scrapy.Field()
     endereco_complemento = scrapy.Field()
+    onibus = scrapy.Field()
+    metro_trem = scrapy.Field()
+    cafes = scrapy.Field()
+    farmacias = scrapy.Field()
     pois = scrapy.Field()
     contato_fones = scrapy.Field()
     contato_whatsapp = scrapy.Field()
@@ -75,3 +81,46 @@ class ZAPItem(scrapy.Item):
     )
     garantias_aluguel = scrapy.Field()
 
+def dictify(chavevalor_str_lst):
+    
+    try:
+        chave, valor = re.search(r'(\w\w):(.+)', chavevalor_str_lst).groups()
+    except:
+        raise
+
+    return { chave: valor }
+
+def concat_str_dict(dict_lst):
+    retdict = dict()
+    for d in dict_lst:
+        for k, v in d.items():
+            l = retdict.get(k, [])
+            l.append(v)
+            retdict[k] = l
+
+    return retdict
+
+def processa_chaves(poidictfull):
+    tipos_conhecidos = {
+        'BS': 'onibus',
+        'TS': 'metro_trem',
+        'CS': 'cafes',
+        'PH': 'farmacias'
+    }
+
+    retdict = { 'pois': [] }
+
+    for k, v in poidictfull.items():
+        if k in tipos_conhecidos:
+            retdict[tipos_conhecidos[k]] = poidictfull[k]
+        
+        else:
+            for poi in v:
+                retdict['pois'].append(f'{k}:{poi}')
+
+    return retdict
+
+class POILoader(ItemLoader):
+    default_output_processor = Join(',')
+
+    pois_out = Compose(MapCompose(dictify), concat_str_dict, processa_chaves)

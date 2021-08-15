@@ -3,7 +3,7 @@
 
 import scrapy
 from scrapy.loader import ItemLoader
-from aptoscraper.items import ZAPItem
+from aptoscraper.items import ZAPItem, POILoader
 
 import logging
 logger = logging.getLogger(__name__)
@@ -127,7 +127,13 @@ class ZAPSpider(scrapy.Spider):
                 l.add_value('nvagas', res['listing']['parkingSpaces'])
                 
                 # pontos de interesse
-                l.add_value('pois', res['listing']['address'].get('poisList', []))
+                poiloader = POILoader()
+                poiloader.add_value('pois', res['listing']['address'].get('poisList', []))
+                pois = poiloader.load_item().get('pois', {})
+                # depois de fazermos o load_item do itemloader principal, temos que 
+                # atualizá-lo com os pontos de interesse
+
+                #l.add_value('pois', res['listing']['address'].get('poisList', []))
 
                 # comodos
                 for c_pt, c_en in comodos_conversao.items():
@@ -178,7 +184,14 @@ class ZAPSpider(scrapy.Spider):
                 # link relativo              
                 l.add_value('link', res['link']['href'])
 
-                yield l.load_item()
+
+                #logger.info(f'LOADED: {l.load_item()} ({pois = })')
+
+                # como mencionado, os pontos de interesse foram processados em um outro itemloader
+                listing_item = l.load_item()
+                listing_item.update(pois)
+
+                yield listing_item
         
         if numero_resultados > 0:
             yield self.create_page_request(page = pg + 1)
