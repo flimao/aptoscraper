@@ -151,3 +151,6 @@ gastos*.json
 
 # pasta Rascunhos
 **/rascunhos/
+
+# pasta bd
+**/bd/
