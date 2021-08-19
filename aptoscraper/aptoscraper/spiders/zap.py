@@ -4,6 +4,7 @@
 import scrapy
 from scrapy.loader import ItemLoader
 from aptoscraper.items import ZAPItem, POILoader
+import datetime as dt
 
 import logging
 logger = logging.getLogger(__name__)
@@ -11,6 +12,10 @@ logger = logging.getLogger(__name__)
 class ZAPSpider(scrapy.Spider):
     name = 'zap'
     allowed_domains = ['zapimoveis.com.br']
+    custom_settings = { "FEEDS": {
+        rf"../bd/zap_{dt.datetime.now().strftime('%Y%m%dT%H%M%S')}.csv": {"format": "csv"}
+        }
+    }
 
     headers = {
         "authority": "glue-api.zapimoveis.com.br",
@@ -85,7 +90,7 @@ class ZAPSpider(scrapy.Spider):
             'city': 'cidade', 
             'neighborhood': 'bairro', 
             'street': 'rua',
-            'complement': 'complemento'
+            'complement': 'complemento',
         } 
 
         # comodos
@@ -120,6 +125,12 @@ class ZAPSpider(scrapy.Spider):
                 # endereco
                 for c_en, c_pt in endereco_campos.items():
                     l.add_value(f'endereco_{c_pt}', res['listing']['address'].get(c_en, ''))
+                try:
+                    latlon = res['listing']['address']['point']
+                    l.add_value(f'endereco_latitude', latlon.get('lat', ''))
+                    l.add_value(f'endereco_longitude', latlon.get('lon', ''))
+                except KeyError:  # não há a informação de latitude e longitude
+                    pass
             
                 l.add_value('amenidades', res['listing']['amenities'])
 

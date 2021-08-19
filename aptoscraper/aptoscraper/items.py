@@ -67,6 +67,12 @@ class ZAPItem(scrapy.Item):
     endereco_bairro = scrapy.Field()
     endereco_rua = scrapy.Field()
     endereco_complemento = scrapy.Field()
+    endereco_latitude = scrapy.Field(
+        output_processor = TakeFirst()
+    )
+    endereco_longitude = scrapy.Field(
+        output_processor = TakeFirst()
+    )
     onibus = scrapy.Field()
     metro_trem = scrapy.Field()
     cafes = scrapy.Field()
