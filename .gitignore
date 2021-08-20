@@ -149,8 +149,7 @@ Data\ Science\ Degree/
 # large API request saved results
 gastos*.json
 
-# pasta Rascunhos
+# pasta rascunhos, bd e scratchscraper
 **/rascunhos/
-
-# pasta bd
 **/bd/
+scratchscraper/
