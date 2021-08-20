@@ -2,19 +2,40 @@
 # -*- coding: utf-8 -*-
 
 #%% imports
+import os
+import sys
+import argparse
 import numpy as np
 import pandas as pd
-from pandas.core.common import flatten  # para extrair entradas unicas de 'amenidades'
-import os
+from pandas.core.common import flatten  # para extrair entradas unicas de 'amenidadess'
 import glob
 import geopy
 from geopy.extra.rate_limiter import RateLimiter
 
-BDDIR = r'../bd'
+#%% 
+BDDIR_DEFAULT = r'../bd'
+MASCARA_PARCIAL_DEFAULT = r'zap_*.csv'
 
-#%% função para carregar em dataframe
+def parse_all_args():  # argparse
+    parser = argparse.ArgumentParser(
+        description = 'Análise de BD do scraper de ofertas de imóveis.',
+    )
 
-def carregar_dataframe_inicial(bddir, mascara_parcial = r'zap_*.csv'):
+    parser.add_argument('--dir', dest='bddir', action='store', default = BDDIR_DEFAULT,
+                        help='diretório no qual se encontram as bases raspadas dos sites de anúncios de imóveis')
+
+    parser.add_argument('--bd', dest='mascara_parcial', action='store', default = MASCARA_PARCIAL_DEFAULT,
+                        help='máscara dos arquivos csv que contém os dados raspados dos sites de anúncios de imóveis')
+    
+    parser.add_argument('--version', action='version', version='%(prog)s 1.0')
+
+    args = parser.parse_args()
+
+    args = args.bddir, args.mascara_parcial
+
+    return args
+
+def carregar_dataframe_inicial(bddir, mascara_parcial):
     # telefones são strings!
     cols_tels = ['contato_fones', 'contato_whatsapp']
     dtypes = { tel: str for tel in cols_tels }
@@ -31,9 +52,8 @@ def carregar_dataframe_inicial(bddir, mascara_parcial = r'zap_*.csv'):
 
     return portaldf_raw
 
-# portaldf_raw = pd.read_csv(r'bd/zap_lagoa.csv', dtype = dtypes)
 
-#%% leve limpeza
+# funções do pipeline de limpeza
 
 # 1. determinando indice
 def setar_indice(df, indice = ['origem', 'id']):
@@ -248,26 +268,34 @@ def pipeline(portaldf_raw):
 
     return portaldf, portaldf_timeseries, extras
 
-def salvar_csv(portaldf, portaldf_timeseries):
+def salvar_csv(portaldf, portaldf_timeseries, bddir):
     # determinar nomes de arquivo
-    csv_salvar_fn_timeseries = os.path.join(os.path.abspath(BDDIR), r'processado', r'imoveis_timeseries.csv')
-    csv_salvar_fn_listagens = os.path.join(os.path.abspath(BDDIR), r'processado', r'imoveis.csv')
+    csv_salvar_fn_timeseries = os.path.join(os.path.abspath(bddir), r'processado', r'imoveis_timeseries.csv')
+    csv_salvar_fn_listagens = os.path.join(os.path.abspath(bddir), r'processado', r'imoveis.csv')
 
     # escrever os csv
     portaldf_timeseries.to_csv(csv_salvar_fn_timeseries)
     portaldf.to_csv(csv_salvar_fn_listagens)
 
 #%% go!
-def main():
-    portaldf_raw = carregar_dataframe_inicial(bddir = BDDIR)
+def main(bddir, mascara_parcial):
+    portaldf_raw = carregar_dataframe_inicial(bddir = bddir, mascara_parcial = mascara_parcial)
     portaldf, portaldf_timeseries, extras = pipeline(portaldf_raw = portaldf_raw)
 
     onibus, metro_trem, farmacias, pois, amenidades = extras
 
-    salvar_csv(portaldf, portaldf_timeseries)
+    salvar_csv(portaldf, portaldf_timeseries, bddir = bddir)
 
     return portaldf, portaldf_timeseries, onibus, metro_trem, farmacias, pois, amenidades
 
 if __name__ == '__main__':
-    allvars = main()
+    
+    if sys.argv[0] == 'analise.py':
+        bddir, mascara_parcial = parse_all_args()
+    else:
+        bddir = BDDIR_DEFAULT
+        mascara_parcial = MASCARA_PARCIAL_DEFAULT
+
+    # go!
+    allvars = main(bddir = bddir, mascara_parcial = mascara_parcial)
     portaldf, portaldf_timeseries, onibus, metro_trem, farmacias, pois, amenidades = allvars
