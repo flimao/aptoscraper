@@ -12,22 +12,24 @@ from geopy.extra.rate_limiter import RateLimiter
 
 BDDIR = r'../bd'
 
-#%% carregar em dataframe
+#%% função para carregar em dataframe
 
-# telefones são strings!
-cols_tels = ['contato_fones', 'contato_whatsapp']
-dtypes = { tel: str for tel in cols_tels }
-dates_cols = ['atualizado_em']
+def carregar_dataframe_inicial(bddir, mascara_parcial = r'zap_*.csv'):
+    # telefones são strings!
+    cols_tels = ['contato_fones', 'contato_whatsapp']
+    dtypes = { tel: str for tel in cols_tels }
+    dates_cols = ['atualizado_em']
 
-# carregar todos os CSV na pasta relevante que começam por 'zap_'
+    # carregar todos os CSV na pasta relevante que começam por 'zap_'
 
-mascara_parcial = r'zap_*.csv'
-mascara = os.path.join(os.path.abspath(BDDIR), mascara_parcial)
+    mascara = os.path.join(os.path.abspath(bddir), mascara_parcial)
 
-bd_csvs = glob.glob(mascara)
-bd_lstdfs = [ pd.read_csv(bd_csv, dtype = dtypes, parse_dates = dates_cols) for bd_csv in bd_csvs ]
+    bd_csvs = glob.glob(mascara)
+    bd_lstdfs = [ pd.read_csv(bd_csv, dtype = dtypes, parse_dates = dates_cols) for bd_csv in bd_csvs ]
 
-portaldf_raw = pd.concat(bd_lstdfs, axis = 0)
+    portaldf_raw = pd.concat(bd_lstdfs, axis = 0)
+
+    return portaldf_raw
 
 # portaldf_raw = pd.read_csv(r'bd/zap_lagoa.csv', dtype = dtypes)
 
@@ -204,48 +206,68 @@ def extrair_ohe_csv(df, col, sep = ','):
     
     return coldf
 
-# executar pipeline
+def pipeline(portaldf_raw):
 
-# processamento de pontos de interesse
-# detecção dos tipos
+    # primeiro, acertamos o indice do dataframe principal
+    portaldf_indice = (portaldf_raw
+        .pipe(setar_indice)
+        .pipe(eliminar_duplicatas)
+        .pipe(add_indice, cols = ['atualizado_em'])
+    )
 
-portaldf_indice = (portaldf_raw
-    .pipe(setar_indice)
-    .pipe(eliminar_duplicatas)
-    .pipe(add_indice, cols = ['atualizado_em'])
-)
+    # processamento de pontos de interesse
 
-onibus = extrair_ohe_csv(portaldf_indice, col = 'onibus')
-metro_trem = extrair_ohe_csv(portaldf_indice, col = 'metro_trem')
-farmacias = extrair_ohe_csv(portaldf_indice, col = 'farmacias')
-pois = extrair_ohe_csv(portaldf_indice, col = 'pois')
+    onibus = extrair_ohe_csv(portaldf_indice, col = 'onibus')
+    metro_trem = extrair_ohe_csv(portaldf_indice, col = 'metro_trem')
+    farmacias = extrair_ohe_csv(portaldf_indice, col = 'farmacias')
+    pois = extrair_ohe_csv(portaldf_indice, col = 'pois')
 
-# processamento de amenidades
-amenidades = extrair_ohe_csv(portaldf_indice, col = 'amenidades')
+    # processamento de amenidades
+    amenidades = extrair_ohe_csv(portaldf_indice, col = 'amenidades')
 
-portaldf_timeseries = (portaldf_indice
-    .pipe(preencher_vazios)
-    .pipe(preencher_latlong)
-    .pipe(escolher_colunas)
-    .pipe(associar_amenidades, df_amenidades = amenidades)
-    .pipe(sort_linhas)
-)
+    extras = (onibus, metro_trem, farmacias, pois, amenidades)
 
-#%% dois csvs: serie temporal (evolução nos precos das ofertas) e ultima listagem de cada imovel
+    # prosseguimento do pipeline de limpeza
+    portaldf_timeseries = (portaldf_indice
+        .pipe(preencher_vazios)
+        .pipe(preencher_latlong)
+        .pipe(escolher_colunas)
+        .pipe(associar_amenidades, df_amenidades = amenidades)
+        .pipe(sort_linhas)
+    )
 
-atualizacao_mais_recente = (portaldf_timeseries
-    .reset_index()
-    .groupby(['origem', 'id'])['atualizado_em']
-    .transform(lambda dt_atualizacao: dt_atualizacao == dt_atualizacao.max())
-) 
-atualizacao_mais_recente.index = portaldf_timeseries.index
-portaldf = portaldf_timeseries[atualizacao_mais_recente].copy()
+    # dois csvs: serie temporal (evolução nos precos das ofertas) e ultima listagem de cada imovel
+    atualizacao_mais_recente = (portaldf_timeseries
+        .reset_index()
+        .groupby(['origem', 'id'])['atualizado_em']
+        .transform(lambda dt_atualizacao: dt_atualizacao == dt_atualizacao.max())
+    ) 
+    atualizacao_mais_recente.index = portaldf_timeseries.index
 
-# %% salvar em csv limpo
-csv_salvar_fn_timeseries = os.path.join(os.path.abspath(BDDIR), r'processado', r'imoveis_timeseries.csv')
-csv_salvar_fn_listagens = os.path.join(os.path.abspath(BDDIR), r'processado', r'imoveis.csv')
-portaldf_timeseries.to_csv(csv_salvar_fn_timeseries)
-portaldf.to_csv(csv_salvar_fn_listagens)
+    portaldf = portaldf_timeseries[atualizacao_mais_recente].copy()
 
-# %% aleatórios
-# print(amenidades.columns)
+    return portaldf, portaldf_timeseries, extras
+
+def salvar_csv(portaldf, portaldf_timeseries):
+    # determinar nomes de arquivo
+    csv_salvar_fn_timeseries = os.path.join(os.path.abspath(BDDIR), r'processado', r'imoveis_timeseries.csv')
+    csv_salvar_fn_listagens = os.path.join(os.path.abspath(BDDIR), r'processado', r'imoveis.csv')
+
+    # escrever os csv
+    portaldf_timeseries.to_csv(csv_salvar_fn_timeseries)
+    portaldf.to_csv(csv_salvar_fn_listagens)
+
+#%% go!
+def main():
+    portaldf_raw = carregar_dataframe_inicial(bddir = BDDIR)
+    portaldf, portaldf_timeseries, extras = pipeline(portaldf_raw = portaldf_raw)
+
+    onibus, metro_trem, farmacias, pois, amenidades = extras
+
+    salvar_csv(portaldf, portaldf_timeseries)
+
+    return portaldf, portaldf_timeseries, onibus, metro_trem, farmacias, pois, amenidades
+
+if __name__ == '__main__':
+    allvars = main()
+    portaldf, portaldf_timeseries, onibus, metro_trem, farmacias, pois, amenidades = allvars
