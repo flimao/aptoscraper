@@ -308,5 +308,5 @@ if __name__ == '__main__':
         mascara_parcial = MASCARA_PARCIAL_DEFAULT
 
     # go!
-    allvars = main(bddir = bddir, mascara_parcial = mascara_parcial)
-    portaldf, portaldf_timeseries, onibus, metro_trem, farmacias, pois, amenidades = allvars
+    alldfs = main(bddir = bddir, mascara_parcial = mascara_parcial)
+    portaldf, portaldf_timeseries, onibus, metro_trem, farmacias, pois, amenidades = alldfs
