@@ -15,6 +15,7 @@ from geopy.extra.rate_limiter import RateLimiter
 #%% 
 BDDIR_DEFAULT = r'../bd'
 MASCARA_PARCIAL_DEFAULT = r'zap_*.csv'
+DEBUG = True
 
 def parse_all_args():  # argparse
     parser = argparse.ArgumentParser(
@@ -51,7 +52,6 @@ def carregar_dataframe_inicial(bddir, mascara_parcial):
     portaldf_raw = pd.concat(bd_lstdfs, axis = 0)
 
     return portaldf_raw
-
 
 # funções do pipeline de limpeza
 
@@ -139,14 +139,24 @@ def preencher_latlong(df):
     geocode_rl = RateLimiter(geocoder.geocode, min_delay_seconds = 1)
 
     # Series com locator com longitude e latitude
-    locators = queries.apply(geocode_rl)
+    if not DEBUG:
+        locators = queries.apply(geocode_rl)
+    else:
+        locators = pd.Series(None, index = queries.index, dtype = 'float64')
 
     # extrair latitude e longitude
+
+    def apply_locator_item(locator):
+        if np.isnan(locator):
+            return {'endereco_latitude': np.nan, 'endereco_longitude': np.nan}
+        else:
+            return {
+                'endereco_latitude': locator.latitude,
+                'endereco_longitude': locator.longitude
+            }
+
     latlong = (locators
-        .apply(lambda l: {
-            'endereco_latitude': l.latitude,
-            'endereco_longitude': l.longitude
-        } if l is not None else {'endereco_latitude': np.nan, 'endereco_longitude': np.nan})
+        .apply(apply_locator_item)
         .apply(pd.Series)  # para transformar em um DataFrame
     )
 
@@ -215,9 +225,10 @@ def extrair_ohe_csv(df, col, sep = ','):
         col_gen = flatten(df[col].str.split(sep))
     except AttributeError: # coluna não tem nenhuma string. Vamos retornar um DF vazio
         return pd.DataFrame([], index = df.index)
-    
-    col_set = set(col_gen)
-    col_set.discard(np.nan)
+
+    col_set_nan = set(col_gen)
+    col_set = { col.strip() for col in col_set_nan if col == col }  # checando por nans em strings.
+
     coldf = pd.DataFrame({
         colitem: (df[col]
                     .str.contains(colitem)
@@ -290,9 +301,9 @@ def main(bddir, mascara_parcial):
 
 if __name__ == '__main__':
     
-    if sys.argv[0] == 'analise.py':
+    if sys.argv[0] == 'analise.py':  # rodar via script cli
         bddir, mascara_parcial = parse_all_args()
-    else:
+    else:  # rodar via jupyter/notebook
         bddir = BDDIR_DEFAULT
         mascara_parcial = MASCARA_PARCIAL_DEFAULT
 
