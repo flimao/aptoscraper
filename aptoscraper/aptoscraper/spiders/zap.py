@@ -311,7 +311,7 @@ class ZAPSpider(scrapy.Spider):
                 "legacyVivarealId,legacyZapId,minisite),medias,accountLink,link)),totalCount))",
             "cityWiseStreet": "1",
             "developmentsSize": "3",
-            "superPremiumSize": "3"
+            "superPremiumSize": str(self.nres)
         }
 
         try:
