@@ -15,7 +15,7 @@ from geopy.extra.rate_limiter import RateLimiter
 #%% 
 BDDIR_DEFAULT = r'../bd'
 MASCARA_PARCIAL_DEFAULT = r'zap_*.csv'
-DEBUG = True
+DEBUG = False
 
 def parse_all_args():  # argparse
     parser = argparse.ArgumentParser(
@@ -27,12 +27,16 @@ def parse_all_args():  # argparse
 
     parser.add_argument('--bd', dest='mascara_parcial', action='store', default = MASCARA_PARCIAL_DEFAULT,
                         help='máscara dos arquivos csv que contém os dados raspados dos sites de anúncios de imóveis')
+
+    parser.add_argument('--debug', dest='debug', action='store', default = DEBUG,
+                        help='modo debug onde a API de geocoding não é acionada.')
+
     
     parser.add_argument('--version', action='version', version='%(prog)s 1.0')
 
     args = parser.parse_args()
 
-    args = args.bddir, args.mascara_parcial
+    args = args.bddir, args.mascara_parcial, args.debug
 
     return args
 
@@ -91,7 +95,8 @@ def preencher_vazios(df, cols_fillna = ['nsuites', 'nvagas'], astype = np.int8):
     return df
 
 # 5. preencher lat e long faltantes
-def preencher_latlong(df):
+def preencher_latlong(df, debug = False, **kwargs):
+    # os kwargs são passados diretamente para o ratelimiter da função de geocoding
     df = df.copy()
 
     # funcoes para construcao de queries
@@ -136,10 +141,11 @@ def preencher_latlong(df):
 
     # construir a função geocode
     geocoder = geopy.Nominatim(user_agent = 'imoveis-bot', timeout = 5)
-    geocode_rl = RateLimiter(geocoder.geocode, min_delay_seconds = 1)
+    geocode_rl = RateLimiter(geocoder.geocode, **kwargs)
+
 
     # Series com locator com longitude e latitude
-    if not DEBUG:
+    if not debug:
         locators = queries.apply(geocode_rl)
     else:
         locators = pd.Series(None, index = queries.index, dtype = 'float64')
@@ -147,7 +153,7 @@ def preencher_latlong(df):
     # extrair latitude e longitude
 
     def apply_locator_item(locator):
-        if np.isnan(locator):
+        if locator is None:
             return {'endereco_latitude': np.nan, 'endereco_longitude': np.nan}
         else:
             return {
@@ -237,7 +243,7 @@ def extrair_ohe_csv(df, col, sep = ','):
     
     return coldf
 
-def pipeline(portaldf_raw):
+def pipeline(portaldf_raw, debug):
 
     # primeiro, acertamos o indice do dataframe principal
     portaldf_indice = (portaldf_raw
@@ -261,7 +267,7 @@ def pipeline(portaldf_raw):
     # prosseguimento do pipeline de limpeza
     portaldf_timeseries = (portaldf_indice
         .pipe(preencher_vazios)
-        .pipe(preencher_latlong)
+        .pipe(preencher_latlong, min_delay_seconds = 1, max_retries = 5, debug = debug)
         .pipe(escolher_colunas)
         .pipe(associar_amenidades, df_amenidades = amenidades)
         .pipe(sort_linhas)
@@ -289,9 +295,9 @@ def salvar_csv(portaldf, portaldf_timeseries, bddir):
     portaldf.to_csv(csv_salvar_fn_listagens)
 
 #%% go!
-def main(bddir, mascara_parcial):
+def main(bddir, mascara_parcial, debug):
     portaldf_raw = carregar_dataframe_inicial(bddir = bddir, mascara_parcial = mascara_parcial)
-    portaldf, portaldf_timeseries, extras = pipeline(portaldf_raw = portaldf_raw)
+    portaldf, portaldf_timeseries, extras = pipeline(portaldf_raw = portaldf_raw, debug = debug)
 
     onibus, metro_trem, farmacias, pois, amenidades = extras
 
@@ -302,11 +308,12 @@ def main(bddir, mascara_parcial):
 if __name__ == '__main__':
     
     if sys.argv[0] == 'analise.py':  # rodar via script cli
-        bddir, mascara_parcial = parse_all_args()
+        bddir, mascara_parcial, debug = parse_all_args()
     else:  # rodar via jupyter/notebook
         bddir = BDDIR_DEFAULT
         mascara_parcial = MASCARA_PARCIAL_DEFAULT
+        debug = DEBUG
 
     # go!
-    alldfs = main(bddir = bddir, mascara_parcial = mascara_parcial)
+    alldfs = main(bddir = bddir, mascara_parcial = mascara_parcial, debug = debug)
     portaldf, portaldf_timeseries, onibus, metro_trem, farmacias, pois, amenidades = alldfs
